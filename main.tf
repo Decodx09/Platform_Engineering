@@ -20,25 +20,19 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# CORRECTED: Use the 'tls_public_key' data source to read the public key
-# from your existing private key file.
 data "tls_public_key" "main" {
   private_key_pem = file(var.private_key_path)
 }
 
 
 # --- Locals ---
-# Create a list of the first two available Availability Zones
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
 
 # --- Resources ---
-
-# Create an EC2 Key Pair in AWS by uploading the public key.
 resource "aws_key_pair" "main" {
-  # We create a unique name based on the key itself to avoid collisions.
   key_name   = "hub-spoke-key-${substr(sha1(data.tls_public_key.main.public_key_openssh), 0, 7)}"
   public_key = data.tls_public_key.main.public_key_openssh
 }
@@ -104,7 +98,6 @@ resource "aws_ec2_transit_gateway" "main" {
   }
 }
 
-# Attach the Admin VPC to the Transit Gateway
 resource "aws_ec2_transit_gateway_vpc_attachment" "admin" {
   subnet_ids         = module.admin_vpc.public_subnet_ids
   transit_gateway_id = aws_ec2_transit_gateway.main.id
@@ -112,7 +105,6 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "admin" {
   tags               = { Name = "tgw-attach-admin" }
 }
 
-# Attach the Development VPC to the Transit Gateway
 resource "aws_ec2_transit_gateway_vpc_attachment" "dev" {
   subnet_ids         = module.dev_vpc.public_subnet_ids
   transit_gateway_id = aws_ec2_transit_gateway.main.id
@@ -120,10 +112,62 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "dev" {
   tags               = { Name = "tgw-attach-dev" }
 }
 
-# Attach the Production VPC to the Transit Gateway
 resource "aws_ec2_transit_gateway_vpc_attachment" "prod" {
   subnet_ids         = module.prod_vpc.public_subnet_ids
   transit_gateway_id = aws_ec2_transit_gateway.main.id
   vpc_id             = module.prod_vpc.vpc_id
   tags               = { Name = "tgw-attach-prod" }
+}
+
+# --- Transit Gateway Routing ---
+# -----------------------------------------------------------------------------
+# Add routes to Admin VPC to reach the other environments
+resource "aws_route" "admin_to_dev" {
+  for_each = toset(module.admin_vpc.public_route_table_ids)
+
+  route_table_id         = each.value
+  destination_cidr_block = module.dev_vpc.vpc_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.main.id
+}
+
+resource "aws_route" "admin_to_prod" {
+  for_each = toset(module.admin_vpc.public_route_table_ids)
+
+  route_table_id         = each.value
+  destination_cidr_block = module.prod_vpc.vpc_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.main.id
+}
+
+# Add routes to Dev VPC's PRIVATE subnets to reach the other environments
+resource "aws_route" "dev_to_admin" {
+  for_each = toset(module.dev_vpc.private_route_table_ids)
+
+  route_table_id         = each.value
+  destination_cidr_block = module.admin_vpc.vpc_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.main.id
+}
+
+resource "aws_route" "dev_to_prod" {
+  for_each = toset(module.dev_vpc.private_route_table_ids)
+
+  route_table_id         = each.value
+  destination_cidr_block = module.prod_vpc.vpc_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.main.id
+}
+
+# Add routes to Prod VPC's PRIVATE subnets to reach the other environments
+resource "aws_route" "prod_to_admin" {
+  for_each = toset(module.prod_vpc.private_route_table_ids)
+
+  route_table_id         = each.value
+  destination_cidr_block = module.admin_vpc.vpc_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.main.id
+}
+
+resource "aws_route" "prod_to_dev" {
+  for_each = toset(module.prod_vpc.private_route_table_ids)
+
+  route_table_id         = each.value
+  destination_cidr_block = module.dev_vpc.vpc_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
