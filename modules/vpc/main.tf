@@ -1,11 +1,3 @@
-# modules/vpc/main.tf
-
-# This file contains all the resources that make up a single, complete environment.
-# It uses conditional logic (the "count" meta-argument) to decide whether to create
-# a Jump Server or a full Application Stack based on the input variables.
-
-# --- Core VPC and Networking ---
-# -----------------------------------------------------------------------------
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -61,11 +53,10 @@ resource "aws_subnet" "private_db" {
   }
 }
 
-# --- NAT GATEWAY (CONDITIONAL & FIXED) ---
-# The number of NAT Gateways is now tied to the number of available public subnets.
+
 resource "aws_eip" "nat" {
   count  = length(var.private_app_subnet_cidrs) > 0 ? length(var.public_subnet_cidrs) : 0
-  domain = "vpc" # Changed from the deprecated "vpc = true"
+  domain = "vpc"
   tags = {
     Name = "${var.env_name}-nat-eip-${count.index + 1}"
   }
@@ -82,7 +73,6 @@ resource "aws_nat_gateway" "main" {
   depends_on = [aws_internet_gateway.main]
 }
 
-# --- ROUTE TABLES ---
 resource "aws_route_table" "public" {
   count = length(var.public_subnet_cidrs) > 0 ? 1 : 0
 
@@ -131,9 +121,6 @@ resource "aws_route_table_association" "private_db" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-
-# --- Jump Server (Conditional) ---
-# -----------------------------------------------------------------------------
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -155,7 +142,7 @@ resource "aws_security_group" "jump_server" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # WARNING: In production, restrict this to your IP
+    cidr_blocks = ["0.0.0.0/0"] 
   }
 
   egress {
@@ -175,7 +162,7 @@ resource "aws_instance" "jump_server" {
 
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public[0].id # Deploy in the first public subnet
+  subnet_id              = aws_subnet.public[0].id 
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.jump_server[0].id]
 
@@ -187,12 +174,10 @@ resource "aws_instance" "jump_server" {
 resource "aws_eip" "jump_server" {
   count    = var.deploy_jump_server ? 1 : 0
   instance = aws_instance.jump_server[0].id
-  domain   = "vpc" # Changed from the deprecated "vpc = true"
+  domain   = "vpc" 
 }
 
 
-# --- Application Stack (Conditional) ---
-# -----------------------------------------------------------------------------
 resource "aws_security_group" "alb" {
   count = var.deploy_app_stack ? 1 : 0
 
@@ -226,7 +211,6 @@ resource "aws_security_group" "app_server" {
   description = "Allow traffic from ALB"
   vpc_id      = aws_vpc.main.id
 
-  # Allow HTTP traffic from the ALB
   ingress {
     from_port       = 80
     to_port         = 80
@@ -247,11 +231,10 @@ resource "aws_security_group" "app_server" {
 }
 
 resource "aws_instance" "app_server" {
-  count = var.deploy_app_stack ? 3 : 0 # Deploy 3 app servers
+  count = var.deploy_app_stack ? 3 : 0 
 
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = "t2.micro"
-  # Distribute instances across the private app subnets
   subnet_id              = aws_subnet.private_app[count.index % length(var.private_app_subnet_cidrs)].id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.app_server[0].id]
@@ -289,7 +272,7 @@ resource "aws_lb_target_group" "main" {
 }
 
 resource "aws_lb_target_group_attachment" "main" {
-  count = var.deploy_app_stack ? 3 : 0 # Attach all 3 instances
+  count = var.deploy_app_stack ? 3 : 0 
 
   target_group_arn = aws_lb_target_group.main[0].arn
   target_id        = aws_instance.app_server[count.index].id
