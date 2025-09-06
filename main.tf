@@ -24,12 +24,10 @@ data "tls_public_key" "main" {
   private_key_pem = file(var.private_key_path)
 }
 
-
 # --- Locals ---
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 }
-
 
 # --- Resources ---
 resource "aws_key_pair" "main" {
@@ -46,9 +44,10 @@ module "admin_vpc" {
   vpc_cidr                 = "10.0.0.0/16"
   key_name                 = aws_key_pair.main.key_name
   azs                      = local.azs
-  public_subnet_cidrs      = ["10.0.1.0/24", "10.0.2.0/24"] # One public subnet in each AZ
-  private_app_subnet_cidrs = []                               # No app servers
-  private_db_subnet_cidrs  = []                               # No databases
+  # We only need one public subnet for the jump server
+  public_subnet_cidrs      = ["10.0.1.0/24"]
+  private_app_subnet_cidrs = []
+  private_db_subnet_cidrs  = []
 
   deploy_app_stack   = false
   deploy_jump_server = true
@@ -88,7 +87,6 @@ module "prod_vpc" {
   deploy_jump_server = false
 }
 
-
 # --- Transit Gateway --- The Central Network Hub
 # -----------------------------------------------------------------------------
 resource "aws_ec2_transit_gateway" "main" {
@@ -123,33 +121,27 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "prod" {
 # -----------------------------------------------------------------------------
 # Add routes to Admin VPC to reach the other environments
 resource "aws_route" "admin_to_dev" {
-  for_each = toset(module.admin_vpc.public_route_table_ids)
-
-  route_table_id         = each.value
+  route_table_id         = module.admin_vpc.public_route_table_id
   destination_cidr_block = module.dev_vpc.vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 
 resource "aws_route" "admin_to_prod" {
-  for_each = toset(module.admin_vpc.public_route_table_ids)
-
-  route_table_id         = each.value
+  route_table_id         = module.admin_vpc.public_route_table_id
   destination_cidr_block = module.prod_vpc.vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 
 # Add routes to Dev VPC's PRIVATE subnets to reach the other environments
 resource "aws_route" "dev_to_admin" {
-  for_each = toset(module.dev_vpc.private_route_table_ids)
-
+  for_each               = module.dev_vpc.private_route_table_ids_by_az
   route_table_id         = each.value
   destination_cidr_block = module.admin_vpc.vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 
 resource "aws_route" "dev_to_prod" {
-  for_each = toset(module.dev_vpc.private_route_table_ids)
-
+  for_each               = module.dev_vpc.private_route_table_ids_by_az
   route_table_id         = each.value
   destination_cidr_block = module.prod_vpc.vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
@@ -157,16 +149,14 @@ resource "aws_route" "dev_to_prod" {
 
 # Add routes to Prod VPC's PRIVATE subnets to reach the other environments
 resource "aws_route" "prod_to_admin" {
-  for_each = toset(module.prod_vpc.private_route_table_ids)
-
+  for_each               = module.prod_vpc.private_route_table_ids_by_az
   route_table_id         = each.value
   destination_cidr_block = module.admin_vpc.vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 
 resource "aws_route" "prod_to_dev" {
-  for_each = toset(module.prod_vpc.private_route_table_ids)
-
+  for_each               = module.prod_vpc.private_route_table_ids_by_az
   route_table_id         = each.value
   destination_cidr_block = module.dev_vpc.vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
