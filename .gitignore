@@ -18,3 +18,5 @@ crash.*.log
 
 # Override the above rule for example variables
 !*.tfvars.example
+
+.shivanshsukhijkey.pem
