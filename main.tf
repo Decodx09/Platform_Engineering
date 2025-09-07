@@ -87,8 +87,7 @@ module "prod_vpc" {
   deploy_jump_server = false
 }
 
-# --- Transit Gateway --- The Central Network Hub
-# -----------------------------------------------------------------------------
+
 resource "aws_ec2_transit_gateway" "main" {
   description = "Central hub for inter-VPC traffic"
   tags = {
@@ -117,9 +116,6 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "prod" {
   tags               = { Name = "tgw-attach-prod" }
 }
 
-# --- Transit Gateway Routing ---
-# -----------------------------------------------------------------------------
-# Add routes to Admin VPC to reach the other environments
 resource "aws_route" "admin_to_dev" {
   route_table_id         = module.admin_vpc.public_route_table_id
   destination_cidr_block = module.dev_vpc.vpc_cidr
@@ -132,7 +128,6 @@ resource "aws_route" "admin_to_prod" {
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 
-# Add routes to Dev VPC's PRIVATE subnets to reach the other environments
 resource "aws_route" "dev_to_admin" {
   for_each               = module.dev_vpc.private_route_table_ids_by_az
   route_table_id         = each.value
@@ -147,7 +142,6 @@ resource "aws_route" "dev_to_prod" {
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 
-# Add routes to Prod VPC's PRIVATE subnets to reach the other environments
 resource "aws_route" "prod_to_admin" {
   for_each               = module.prod_vpc.private_route_table_ids_by_az
   route_table_id         = each.value
