@@ -1,4 +1,4 @@
-# Hub-and-Spoke AWS Architecture with Terraform
+# PRODUCTION GRADE INFRASTRUCTURE IN ONE CLICK ON AWS
 
 Terraform code to deploy a production-grade, multi-environment (Admin, Dev, Prod) Hub-and-Spoke architecture on AWS.
 
