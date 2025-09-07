@@ -1,47 +1,53 @@
-Hub-and-Spoke AWS Architecture with Terraform
+# Hub-and-Spoke AWS Architecture with Terraform
+
 Terraform code to deploy a production-grade, multi-environment (Admin, Dev, Prod) Hub-and-Spoke architecture on AWS.
 
-Prerequisites
-AWS CLI (configured)
+## Prerequisites
 
-Terraform CLI
+* AWS CLI (configured)
+* Terraform CLI
+* An SSH `.pem` key file
 
-An SSH .pem key file
+## How to Deploy
 
-How to Deploy
-1. Create the Backend
+### 1. Create the Backend
+
 First, create the S3 bucket that will store the Terraform state.
 
 cd backend-setup
 terraform init
 terraform apply --auto-approve
 
-Note: After this runs, copy the s3_bucket_name from the output.
 
-2. Deploy the Infrastructure
+**Note:** After this runs, copy the `s3_bucket_name` from the output.
+
+### 2. Deploy the Infrastructure
+
 Now, build the main architecture.
 
-Navigate back to the root directory:
+1. Navigate back to the root directory:
 
-cd ..
+2. Open `backend.tf` and paste the S3 bucket name you copied.
 
-Open backend.tf and paste the S3 bucket name you copied.
-
-Create a terraform.tfvars file with the path to your key:
+3. Create a `terraform.tfvars` file with the path to your key:
 
 private_key_path = "path/to/your/key.pem"
 
-Initialize and deploy:
+4. Initialize and deploy:
 
 terraform init
 terraform apply --auto-approve
 
-How to Destroy
+
+## How to Destroy
+
 Run the destroy commands in the reverse order of creation.
 
-# In the root directory
+In the root directory
 terraform destroy --auto-approve
 
-# In the backend-setup directory
+In the backend-setup directory
 cd backend-setup
 terraform destroy --auto-approve
+
+
