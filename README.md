@@ -14,9 +14,9 @@ Terraform code to deploy a production-grade, multi-environment (Admin, Dev, Prod
 
 First, create the S3 bucket that will store the Terraform state.
 
-cd backend-setup
-terraform init
-terraform apply --auto-approve
+#### cd backend-setup
+#### terraform init
+#### terraform apply --auto-approve
 
 
 **Note:** After this runs, copy the `s3_bucket_name` from the output.
@@ -35,8 +35,8 @@ private_key_path = "path/to/your/key.pem"
 
 4. Initialize and deploy:
 
-terraform init
-terraform apply --auto-approve
+#### terraform init
+#### terraform apply --auto-approve
 
 
 ## How to Destroy
@@ -44,10 +44,10 @@ terraform apply --auto-approve
 Run the destroy commands in the reverse order of creation.
 
 In the root directory
-terraform destroy --auto-approve
+#### terraform destroy --auto-approve
 
 In the backend-setup directory
-cd backend-setup
-terraform destroy --auto-approve
+#### cd backend-setup
+#### terraform destroy --auto-approve
 
 
